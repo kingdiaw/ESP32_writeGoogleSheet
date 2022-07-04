@@ -11,13 +11,15 @@ const char* HOST = "script.google.com";
 const int PORT = 443;
 const uint8_t SERVO_PIN = 18;
 const uint32_t INTERVAL_TASK1 = 60000;  //update gsheet
-const uint16_t INTERVAL_TASK2 = 200;    //update servo position
+const uint16_t INTERVAL_TASK2 = 2000;    //update servo position
 const uint16_t INTERVAL_TASK3 = 1000;   //update Displaying Time
 const char* NTP_SERVER = "pool.ntp.org";
 const long  GMT_OFFSET_SEC = 3600;
 const int   DAYLIGHT_OFFSET_SEC = 3600;
 const uint8_t PV_POSITION_ARRAY[8] = {25, 35, 45, 55, 65, 75, 85, 95};
-
+const uint8_t HOUR_START = 15;  //(8)8AM
+const uint8_t HOUR_STOP = 23;   //(18)6PM
+const uint8_t INDEX_OFFSET = 16;  // INDEX OFFSET = HOUR_START
 //(3)-Object Mapping
 WiFiClientSecure client;
 WiFiManager wm;
@@ -129,15 +131,20 @@ void loop() {
   }
   if (timeUpdate_task2 < millis()) {
     static uint8_t pos;
+    static uint8_t kHour;
     timeUpdate_task2 = millis() + INTERVAL_TASK2;
     //Application Task 2
-    if (++pos > 180)pos = 0;
-    Serial.println(pos);
-    myservo.write(pos);
+    //if (++pos > 180)pos = 0;
+    kHour = rtc.getHour(true);
+    if (kHour >= HOUR_START && kHour <= HOUR_STOP) {
+      pos = PV_POSITION_ARRAY[kHour - INDEX_OFFSET];
+      Serial.println(pos);
+      myservo.write(pos);
+    }
   }
-  if (timeUpdate_task3 < millis()) {
-    timeUpdate_task3 = millis() + INTERVAL_TASK3;
-    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format
-    Serial.println(rtc.getHour(true)); 
-  }
+  //  if (timeUpdate_task3 < millis()) {
+  //    timeUpdate_task3 = millis() + INTERVAL_TASK3;
+  //    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format
+  //    Serial.println(rtc.getHour(true));
+  //  }
 }
