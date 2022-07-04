@@ -16,10 +16,11 @@ const uint16_t INTERVAL_TASK3 = 1000;   //update Displaying Time
 const char* NTP_SERVER = "pool.ntp.org";
 const long  GMT_OFFSET_SEC = 3600;
 const int   DAYLIGHT_OFFSET_SEC = 3600;
-const uint8_t PV_POSITION_ARRAY[8] = {25, 35, 45, 55, 65, 75, 85, 95};
-const uint8_t HOUR_START = 15;  //(8)8AM
-const uint8_t HOUR_STOP = 23;   //(18)6PM
-const uint8_t INDEX_OFFSET = 16;  // INDEX OFFSET = HOUR_START
+const uint8_t PV_POSITION_ARRAY[9] = {25, 35, 45, 55, 65, 75, 85, 95, 100};
+const uint8_t HOUR_START = 15;  //(9)9AM
+const uint8_t HOUR_STOP = 23;   //(17)5PM
+const uint8_t INDEX_OFFSET = HOUR_START;
+
 //(3)-Object Mapping
 WiFiClientSecure client;
 WiFiManager wm;
@@ -111,7 +112,6 @@ void setup_rtc(void) {
 }
 
 
-
 void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
@@ -142,9 +142,4 @@ void loop() {
       myservo.write(pos);
     }
   }
-  //  if (timeUpdate_task3 < millis()) {
-  //    timeUpdate_task3 = millis() + INTERVAL_TASK3;
-  //    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format
-  //    Serial.println(rtc.getHour(true));
-  //  }
 }
