@@ -3,7 +3,8 @@
 #include <WiFiManager.h>      // https://github.com/tzapu/WiFiManager
 #include <ESP32Servo.h>
 
-//API:https://script.google.com/macros/s/AKfycbzIbiJlAI4H4iHRTwueYlhXXUDJF1X5E7MWmgbowVBhgbRGkr4dJoFCWyIX0zYFAHAr/exec?temp=24&humi=55.8
+//API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
+
 //(2)-Define Constant Value
 const char* HOST = "script.google.com";
 const int PORT = 443;
@@ -20,8 +21,10 @@ Servo myservo;
 const unsigned char temp_sensor = 35;
 
 //(5)-Global Variable Declaration
-float suhu = 27.0;
-float humi = 56.7;
+float Vpv = 0.0;
+float Ipv = 0.0;
+float Vbat = 0.0;
+float Ibat = 0.0;
 uint32_t timeUpdate_task1 = 0;
 uint32_t timeUpdate_task2 = 0;
 
@@ -64,7 +67,7 @@ void update_gsheet(void) {
     Serial.println("Connected to server!");
     //Prepare HTTP header
     String header = "";
-    header = "GET https://script.google.com/macros/s/AKfycbzIbiJlAI4H4iHRTwueYlhXXUDJF1X5E7MWmgbowVBhgbRGkr4dJoFCWyIX0zYFAHAr/exec?temp=" + (String(suhu)) + "&humi=" + (String(humi)) + " HTTP/1.0\n";
+    header = "GET https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=" + (String(Vpv)) + "&Ipv=" + (String(Ipv)) + "&Vbat=" + (String(Vbat)) + "&Ibat=" + (String(Ibat)) + " HTTP/1.0\n";
     header += "Host: script.google.com\n";
     header += "Connection: close\n\n";
     Serial.print(header);
@@ -94,6 +97,7 @@ void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
   setup_wifi();
+  setup_servo();
 
 }
 
