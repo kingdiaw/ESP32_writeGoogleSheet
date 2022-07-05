@@ -31,7 +31,6 @@ const uint8_t POWER_MW_INDEX = 0x03;
 const uint8_t LOAD_VOLTAGE_INDEX = 0x04;
 const uint8_t LED = 2;
 
-
 //(3)-Object Mapping
 WiFiClientSecure client;
 WiFiManager wm;
@@ -162,12 +161,12 @@ void read_battery_data(void){
  battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX]+ (battery_array[SHUNT_VOLTAGE_INDEX]/1000);  
 }
 
-//6.7 setup_digital_IO
+//6.8 setup_digital_IO
 void setup_digital_IO(void){
   pinMode (LED, OUTPUT);  
 }
 
-//6.8 blinking LED
+//6.9 blinking LED
 void blink_LED(void){
   static uint32_t kLedTick;
   if(kLedTick < millis()){
