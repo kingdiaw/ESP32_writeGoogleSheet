@@ -6,7 +6,6 @@
 #include <Wire.h>
 #include <Adafruit_INA219.h>  // by Adafruit
 
-//API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
 
 //(2)-Define Constant Value
 const char* HOST = "script.google.com";
@@ -86,6 +85,7 @@ void setup_servo(void) {
   // "myservo.attach(SERVO_PIN);"
 }
 //6.3 Function - update_gssheet()
+//API:https://script.google.com/macros/s/AKfycbxfnWpXrau4SUmAwKpm2wjNZc0DIBu0H5KI54mM0gCPgbjLcFhxQrf0CdE0tMuUok3Wrg/exec?Vpv=17.8&Ipv=190.8&Vbat=12.7&Ibat=56.8
 void update_gsheet(void) {
   Serial.println("\nStarting connection to server...");
   client.setInsecure();//skip verification
@@ -95,7 +95,7 @@ void update_gsheet(void) {
     Serial.println("Connected to server!");
     //Prepare HTTP header
     String header = "";
-    header = "GET https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=" + (String(Vpv)) + "&Ipv=" + (String(Ipv)) + "&Vbat=" + (String(Vbat)) + "&Ibat=" + (String(Ibat)) + " HTTP/1.0\n";
+    header = "GET https://script.google.com/macros/s/AKfycbxfnWpXrau4SUmAwKpm2wjNZc0DIBu0H5KI54mM0gCPgbjLcFhxQrf0CdE0tMuUok3Wrg/exec?Vpv=" + (String(Vpv)) + "&Ipv=" + (String(Ipv)) + "&Vbat=" + (String(Vbat)) + "&Ibat=" + (String(Ibat)) + " HTTP/1.0\n";
     header += "Host: script.google.com\n";
     header += "Connection: close\n\n";
     Serial.print(header);
@@ -205,23 +205,23 @@ void loop() {
       update_gsheet();
     }
   }
-  if (timeUpdate_task2 < millis()) {
-    static uint8_t pos;
-    static uint8_t kHour;
-    timeUpdate_task2 = millis() + INTERVAL_TASK2;
-    //Application Task 2
-    kHour = rtc.getHour(true);
-    if (kHour >= HOUR_START && kHour <= HOUR_STOP) {
-      pos = PV_POSITION_ARRAY[kHour - INDEX_OFFSET];
-    }
-    else if (kHour >= 0 && kHour < HOUR_START) {
-      pos = PV_POSITION_ARRAY[0];
-    }
-    else if (kHour > HOUR_STOP && kHour <= 23) {
-      pos = PV_POSITION_ARRAY[8];
-    }
-    Serial.println(pos);
-    myservo.write(pos);
-  }
+//  if (timeUpdate_task2 < millis()) {
+//    static uint8_t pos;
+//    static uint8_t kHour;
+//    timeUpdate_task2 = millis() + INTERVAL_TASK2;
+//    //Application Task 2
+//    kHour = rtc.getHour(true);
+//    if (kHour >= HOUR_START && kHour <= HOUR_STOP) {
+//      pos = PV_POSITION_ARRAY[kHour - INDEX_OFFSET];
+//    }
+//    else if (kHour >= 0 && kHour < HOUR_START) {
+//      pos = PV_POSITION_ARRAY[0];
+//    }
+//    else if (kHour > HOUR_STOP && kHour <= 23) {
+//      pos = PV_POSITION_ARRAY[8];
+//    }
+//    Serial.println(pos);
+//    myservo.write(pos);
+//  }
 }
 //=========================== END LOOP =============================
