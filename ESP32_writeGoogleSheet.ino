@@ -29,7 +29,7 @@ const uint8_t BUS_VOLTAGE_INDEX = 0x01;
 const uint8_t CURRENT_MA_INDEX = 0x02;
 const uint8_t POWER_MW_INDEX = 0x03;
 const uint8_t LOAD_VOLTAGE_INDEX = 0x04;
-
+const uint8_t LED = 2;
 
 //(3)-Object Mapping
 WiFiClientSecure client;
@@ -161,6 +161,20 @@ void read_battery_data(void){
  battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX]+ (battery_array[SHUNT_VOLTAGE_INDEX]/1000);  
 }
 
+//6.8 setup_digital_IO
+void setup_digital_IO(void){
+  pinMode (LED, OUTPUT);  
+}
+
+//6.9 blinking LED
+void blink_LED(void){
+  static uint32_t kLedTick;
+  if(kLedTick < millis()){
+    kLedTick = millis() + 200;
+    digitalWrite (LED, digitalRead(LED)^1);
+  }
+}
+
 //=========================== SETUP =================================
 void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
@@ -169,11 +183,13 @@ void setup() {
   setup_servo();
   setup_rtc();
   setup_ina219();
+  setup_digital_IO();
 }
 
 //========================== LOOP ===================================
 void loop() {
   wm.process();
+  blink_LED();
   // put your main code here, to run repeatedly:
   if (timeUpdate_task1  < millis()) {
     timeUpdate_task1 = millis() + INTERVAL_TASK1;
