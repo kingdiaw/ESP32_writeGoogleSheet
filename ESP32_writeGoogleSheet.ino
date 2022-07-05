@@ -24,6 +24,12 @@ const uint8_t HOUR_STOP = 23;   //(17)5PM
 const uint8_t INDEX_OFFSET = HOUR_START;
 const uint8_t ADD_INA219_PV = 0x40;
 const uint8_t ADD_INA219_BAT = 0x41;
+const uint8_t SHUNT_VOLTAGE_INDEX = 0x00;
+const uint8_t BUS_VOLTAGE_INDEX = 0x01;
+const uint8_t CURRENT_MA_INDEX = 0x02;
+const uint8_t POWER_MW_INDEX = 0x03;
+const uint8_t LOAD_VOLTAGE_INDEX = 0x04;
+
 
 //(3)-Object Mapping
 WiFiClientSecure client;
@@ -41,6 +47,9 @@ float Vpv = 0.0;
 float Ipv = 0.0;
 float Vbat = 0.0;
 float Ibat = 0.0;
+float pv_array[5];
+float battery_array[5];
+
 uint32_t timeUpdate_task1 = 0;
 uint32_t timeUpdate_task2 = 0;
 uint32_t timeUpdate_task3 = 0;
@@ -134,6 +143,24 @@ void setup_ina219(void) {
   }
 }
 
+//6.6 Read Data from INA219 (PV)
+void read_pv_data(void){
+ pv_array[SHUNT_VOLTAGE_INDEX] = pv.getShuntVoltage_mV();
+ pv_array[BUS_VOLTAGE_INDEX] = pv.getBusVoltage_V();
+ pv_array[CURRENT_MA_INDEX] = pv.getCurrent_mA();
+ pv_array[POWER_MW_INDEX] = pv.getPower_mW();
+ pv_array[LOAD_VOLTAGE_INDEX] = pv_array[BUS_VOLTAGE_INDEX]+ (pv_array[SHUNT_VOLTAGE_INDEX]/1000);
+}
+
+//6.7 Read Data from INA219 (BATTERY)
+void read_battery_data(void){
+ battery_array[SHUNT_VOLTAGE_INDEX] = battery.getShuntVoltage_mV();
+ battery_array[BUS_VOLTAGE_INDEX] = battery.getBusVoltage_V();
+ battery_array[CURRENT_MA_INDEX] = battery.getCurrent_mA();
+ battery_array[POWER_MW_INDEX] = battery.getPower_mW();
+ battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX]+ (battery_array[SHUNT_VOLTAGE_INDEX]/1000);  
+}
+
 //=========================== SETUP =================================
 void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
@@ -152,6 +179,12 @@ void loop() {
     timeUpdate_task1 = millis() + INTERVAL_TASK1;
     //Application for Task 1
     if (ina219_isOK) {
+      read_pv_data();
+      read_battery_data();
+      Vpv = pv_array[LOAD_VOLTAGE_INDEX];
+      Ipv = pv_array[CURRENT_MA_INDEX];
+      Vbat = battery_array[LOAD_VOLTAGE_INDEX];
+      Ibat = battery_array[CURRENT_MA_INDEX];
       update_gsheet();
     }
   }
