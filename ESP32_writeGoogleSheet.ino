@@ -6,21 +6,22 @@
 #include <Wire.h>
 #include <Adafruit_INA219.h>  // by Adafruit
 
+
 //API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
 
 //(2)-Define Constant Value
 const char* HOST = "script.google.com";
 const int PORT = 443;
-const uint8_t SERVO_PIN = 18;
+const uint8_t SERVO_PIN = 14;
 const uint32_t INTERVAL_TASK1 = 60000;  //update gsheet
 const uint16_t INTERVAL_TASK2 = 2000;   //update servo position
 const uint16_t INTERVAL_TASK3 = 1000;   //update Displaying Time
 const char* NTP_SERVER = "pool.ntp.org";
-const long  GMT_OFFSET_SEC = 3600;
-const int   DAYLIGHT_OFFSET_SEC = 3600;
+const long  GMT_OFFSET_SEC = 3600*8;    //GMT+8
+const int   DAYLIGHT_OFFSET_SEC = 0;
 const uint8_t PV_POSITION_ARRAY[9] = {25, 35, 45, 55, 65, 75, 85, 95, 100};
-const uint8_t HOUR_START = 15;  //(9)9AM
-const uint8_t HOUR_STOP = 23;   //(17)5PM
+const uint8_t HOUR_START = 9;  //(9)9AM
+const uint8_t HOUR_STOP = 17;   //(17)5PM
 const uint8_t INDEX_OFFSET = HOUR_START;
 const uint8_t ADD_INA219_PV = 0x40;
 const uint8_t ADD_INA219_BAT = 0x41;
@@ -35,7 +36,7 @@ const uint8_t LED = 2;
 WiFiClientSecure client;
 WiFiManager wm;
 Servo myservo;
-ESP32Time rtc(3600 * 8); //offset in seconds GMT+8
+ESP32Time rtc;
 Adafruit_INA219 pv(ADD_INA219_PV);
 Adafruit_INA219 battery(ADD_INA219_BAT);
 
