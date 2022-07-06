@@ -16,11 +16,11 @@ const uint32_t INTERVAL_TASK1 = 60000;  //update gsheet
 const uint16_t INTERVAL_TASK2 = 2000;   //update servo position
 const uint16_t INTERVAL_TASK3 = 1000;   //update Displaying Time
 const char* NTP_SERVER = "pool.ntp.org";
-const long  GMT_OFFSET_SEC = 3600;
-const int   DAYLIGHT_OFFSET_SEC = 3600;
+const long  GMT_OFFSET_SEC = 3600*8; //Offset GMT + 8
+const int   DAYLIGHT_OFFSET_SEC = 0;
 const uint8_t PV_POSITION_ARRAY[9] = {25, 35, 45, 55, 65, 75, 85, 95, 100};
-const uint8_t HOUR_START = 15;  //(9)9AM
-const uint8_t HOUR_STOP = 23;   //(17)5PM
+const uint8_t HOUR_START = 9;  //(9)9AM
+const uint8_t HOUR_STOP = 17;   //(17)5PM
 const uint8_t INDEX_OFFSET = HOUR_START;
 const uint8_t ADD_INA219_PV = 0x40;
 const uint8_t ADD_INA219_BAT = 0x41;
@@ -35,7 +35,7 @@ const uint8_t LED = 2;
 WiFiClientSecure client;
 WiFiManager wm;
 Servo myservo;
-ESP32Time rtc(3600 * 8); //offset in seconds GMT+8
+ESP32Time rtc;
 Adafruit_INA219 pv(ADD_INA219_PV);
 Adafruit_INA219 battery(ADD_INA219_BAT);
 
@@ -121,6 +121,7 @@ void update_gsheet(void) {
 //6.4 Setup RTC set with NTP
 void setup_rtc(void) {
   configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
+  //rtc.setTime(0, 35, 10, 6, 7, 2022);  // 17th Jan 2021 15:24:30
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)) {
     rtc.setTimeStruct(timeinfo);
@@ -210,6 +211,8 @@ void loop() {
     timeUpdate_task2 = millis() + INTERVAL_TASK2;
     //Application Task 2
     kHour = rtc.getHour(true);
+    Serial.print("Hour:");
+    Serial.println(kHour); 
     if (kHour >= HOUR_START && kHour <= HOUR_STOP) {
       pos = PV_POSITION_ARRAY[kHour - INDEX_OFFSET];
     }
@@ -219,6 +222,7 @@ void loop() {
     else if (kHour > HOUR_STOP && kHour <= 23) {
       pos = PV_POSITION_ARRAY[8];
     }
+    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S")); 
     Serial.println(pos);
     myservo.write(pos);
   }
