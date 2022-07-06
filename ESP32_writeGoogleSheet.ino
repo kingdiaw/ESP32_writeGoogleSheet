@@ -5,22 +5,22 @@
 #include <ESP32Time.h>        //https://github.com/fbiego/ESP32Time
 #include <Wire.h>
 #include <Adafruit_INA219.h>  // by Adafruit
+#include <RTClib.h>           //https://github.com/adafruit/RTClib
 
-//API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
 
 //(2)-Define Constant Value
 const char* HOST = "script.google.com";
 const int PORT = 443;
-const uint8_t SERVO_PIN = 18;
+const uint8_t SERVO_PIN = 14;
 const uint32_t INTERVAL_TASK1 = 60000;  //update gsheet
 const uint16_t INTERVAL_TASK2 = 2000;   //update servo position
 const uint16_t INTERVAL_TASK3 = 1000;   //update Displaying Time
 const char* NTP_SERVER = "pool.ntp.org";
-const long  GMT_OFFSET_SEC = 3600;
-const int   DAYLIGHT_OFFSET_SEC = 3600;
+const long  GMT_OFFSET_SEC = 3600 * 8;  //GMT+8
+const int   DAYLIGHT_OFFSET_SEC = 0;
 const uint8_t PV_POSITION_ARRAY[9] = {25, 35, 45, 55, 65, 75, 85, 95, 100};
-const uint8_t HOUR_START = 15;  //(9)9AM
-const uint8_t HOUR_STOP = 23;   //(17)5PM
+const uint8_t HOUR_START = 9;  //(9)9AM
+const uint8_t HOUR_STOP = 17;   //(17)5PM
 const uint8_t INDEX_OFFSET = HOUR_START;
 const uint8_t ADD_INA219_PV = 0x40;
 const uint8_t ADD_INA219_BAT = 0x41;
@@ -30,12 +30,15 @@ const uint8_t CURRENT_MA_INDEX = 0x02;
 const uint8_t POWER_MW_INDEX = 0x03;
 const uint8_t LOAD_VOLTAGE_INDEX = 0x04;
 const uint8_t LED = 2;
+RTC_DATA_ATTR int bootCount = 0;
 
 //(3)-Object Mapping
 WiFiClientSecure client;
 WiFiManager wm;
 Servo myservo;
-ESP32Time rtc(3600 * 8); //offset in seconds GMT+8
+RTC_DS3231 ds3231;
+ESP32Time rtc;
+
 Adafruit_INA219 pv(ADD_INA219_PV);
 Adafruit_INA219 battery(ADD_INA219_BAT);
 
@@ -54,6 +57,7 @@ uint32_t timeUpdate_task1 = 0;
 uint32_t timeUpdate_task2 = 0;
 uint32_t timeUpdate_task3 = 0;
 bool ina219_isOK = false;
+bool ds3231_isOK = false;
 
 //6.1 Function - setup_wifi()
 void setup_wifi(void) {
@@ -85,6 +89,7 @@ void setup_servo(void) {
   // "myservo.attach(SERVO_PIN);"
 }
 //6.3 Function - update_gssheet()
+//API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
 void update_gsheet(void) {
   Serial.println("\nStarting connection to server...");
   client.setInsecure();//skip verification
@@ -118,13 +123,37 @@ void update_gsheet(void) {
   }
 }
 
-//6.4 Setup RTC set with NTP
+//6.4 Setup RTC using DS3231
 void setup_rtc(void) {
-  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo)) {
-    rtc.setTimeStruct(timeinfo);
+  ds3231_isOK = true;
+  if (! ds3231.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    ds3231_isOK = false;
   }
+  if (ds3231.lostPower()) {
+    Serial.println("RTC lost power, let's set the time!");
+    ds3231.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+
+  //we don't need the 32K Pin, so disable it
+  ds3231.disable32K();
+
+  // set alarm 1, 2 flag to false (so alarm 1, 2 didn't happen so far)
+  // if not done, this easily leads to problems, as both register aren't reset on reboot/recompile
+  ds3231.clearAlarm(1);
+  ds3231.clearAlarm(2);
+
+  // stop oscillating signals at SQW Pin
+  // otherwise setAlarm1 will fail
+  ds3231.writeSqwPinMode(DS3231_OFF);
+
+  // turn off alarm 2 (in case it isn't off already)
+  // again, this isn't done at reboot, so a previously set alarm could easily go overlooked
+  ds3231.disableAlarm(2);
+
+  DateTime now = ds3231.now();
+  rtc.setTime(now.second(), now.minute(), now.hour(), now.day(), now.month(), now.year());
 }
 
 //6.5 Setup INA219
@@ -144,36 +173,67 @@ void setup_ina219(void) {
 }
 
 //6.6 Read Data from INA219 (PV)
-void read_pv_data(void){
- pv_array[SHUNT_VOLTAGE_INDEX] = pv.getShuntVoltage_mV();
- pv_array[BUS_VOLTAGE_INDEX] = pv.getBusVoltage_V();
- pv_array[CURRENT_MA_INDEX] = pv.getCurrent_mA();
- pv_array[POWER_MW_INDEX] = pv.getPower_mW();
- pv_array[LOAD_VOLTAGE_INDEX] = pv_array[BUS_VOLTAGE_INDEX]+ (pv_array[SHUNT_VOLTAGE_INDEX]/1000);
+void read_pv_data(void) {
+  pv_array[SHUNT_VOLTAGE_INDEX] = pv.getShuntVoltage_mV();
+  pv_array[BUS_VOLTAGE_INDEX] = pv.getBusVoltage_V();
+  pv_array[CURRENT_MA_INDEX] = pv.getCurrent_mA();
+  pv_array[POWER_MW_INDEX] = pv.getPower_mW();
+  pv_array[LOAD_VOLTAGE_INDEX] = pv_array[BUS_VOLTAGE_INDEX] + (pv_array[SHUNT_VOLTAGE_INDEX] / 1000);
 }
 
 //6.7 Read Data from INA219 (BATTERY)
-void read_battery_data(void){
- battery_array[SHUNT_VOLTAGE_INDEX] = battery.getShuntVoltage_mV();
- battery_array[BUS_VOLTAGE_INDEX] = battery.getBusVoltage_V();
- battery_array[CURRENT_MA_INDEX] = battery.getCurrent_mA();
- battery_array[POWER_MW_INDEX] = battery.getPower_mW();
- battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX]+ (battery_array[SHUNT_VOLTAGE_INDEX]/1000);  
+void read_battery_data(void) {
+  battery_array[SHUNT_VOLTAGE_INDEX] = battery.getShuntVoltage_mV();
+  battery_array[BUS_VOLTAGE_INDEX] = battery.getBusVoltage_V();
+  battery_array[CURRENT_MA_INDEX] = battery.getCurrent_mA();
+  battery_array[POWER_MW_INDEX] = battery.getPower_mW();
+  battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX] + (battery_array[SHUNT_VOLTAGE_INDEX] / 1000);
 }
 
 //6.8 setup_digital_IO
-void setup_digital_IO(void){
-  pinMode (LED, OUTPUT);  
+void setup_digital_IO(void) {
+  pinMode (LED, OUTPUT);
 }
 
 //6.9 blinking LED
-void blink_LED(void){
+void blink_LED(void) {
   static uint32_t kLedTick;
-  if(kLedTick < millis()){
+  if (kLedTick < millis()) {
     kLedTick = millis() + 200;
-    digitalWrite (LED, digitalRead(LED)^1);
+    digitalWrite (LED, digitalRead(LED) ^ 1);
   }
 }
+
+//6.10
+/*
+  Method to print the reason by which ESP32
+  has been awaken from sleep
+*/
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch (wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
+  }
+}
+
+//6.11 goingToSleep
+void going_to_sleep() {
+
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 0); //1 = High, 0 = Low
+  //Go to sleep now
+  Serial.println("Going to sleep now");
+  esp_deep_sleep_start();
+}
+
 
 //=========================== SETUP =================================
 void setup() {
@@ -184,6 +244,12 @@ void setup() {
   setup_rtc();
   setup_ina219();
   setup_digital_IO();
+  //Increment boot number and print it every reboot
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount));
+
+  //Print the wakeup reason for ESP32
+  print_wakeup_reason();
 }
 
 //========================== LOOP ===================================
@@ -213,12 +279,25 @@ void loop() {
     if (kHour >= HOUR_START && kHour <= HOUR_STOP) {
       pos = PV_POSITION_ARRAY[kHour - INDEX_OFFSET];
     }
-    else if (kHour >= 0 && kHour < HOUR_START) {
-      pos = PV_POSITION_ARRAY[0];
+    //    else if (kHour >= 0 && kHour < HOUR_START) {
+    //      pos = PV_POSITION_ARRAY[0];
+    //    }
+    //    else if (kHour > HOUR_STOP && kHour <= 23) {
+    //      pos = PV_POSITION_ARRAY[8];
+    //    }
+    if (kHour > HOUR_START) { //6PM and above
+      // schedule an alarm 13 hours 30 minutes 0 seconds in the future
+      if (!ds3231.setAlarm1(
+            ds3231.now() + TimeSpan(0, 13, 30, 0), //TimeSpan(int16_t days, int8_t hours, int8_t minutes, int8_t seconds);
+            DS3231_A1_Hour
+          )) {
+        Serial.println("Error, alarm wasn't set!");
+      } else {
+        Serial.println("Alarm will happen in 13.5 Hours");
+      }
+      going_to_sleep();
     }
-    else if (kHour > HOUR_STOP && kHour <= 23) {
-      pos = PV_POSITION_ARRAY[8];
-    }
+
     Serial.println(pos);
     myservo.write(pos);
   }
