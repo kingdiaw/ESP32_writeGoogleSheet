@@ -5,7 +5,7 @@
 #include <ESP32Time.h>        //https://github.com/fbiego/ESP32Time
 #include <Wire.h>
 #include <Adafruit_INA219.h>  // by Adafruit
-#include "RTClib.h"           //https://github.com/adafruit/RTClib
+#include <RTClib.h>           //https://github.com/adafruit/RTClib
 
 
 //(2)-Define Constant Value
@@ -30,6 +30,7 @@ const uint8_t CURRENT_MA_INDEX = 0x02;
 const uint8_t POWER_MW_INDEX = 0x03;
 const uint8_t LOAD_VOLTAGE_INDEX = 0x04;
 const uint8_t LED = 2;
+RTC_DATA_ATTR int bootCount = 0;
 
 //(3)-Object Mapping
 WiFiClientSecure client;
@@ -134,6 +135,33 @@ void setup_rtc(void) {
     Serial.println("RTC lost power, let's set the time!");
     ds3231.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
+
+  //we don't need the 32K Pin, so disable it
+  ds3231.disable32K();
+
+  // set alarm 1, 2 flag to false (so alarm 1, 2 didn't happen so far)
+  // if not done, this easily leads to problems, as both register aren't reset on reboot/recompile
+  ds3231.clearAlarm(1);
+  ds3231.clearAlarm(2);
+
+  // stop oscillating signals at SQW Pin
+  // otherwise setAlarm1 will fail
+  ds3231.writeSqwPinMode(DS3231_OFF);
+
+  // turn off alarm 2 (in case it isn't off already)
+  // again, this isn't done at reboot, so a previously set alarm could easily go overlooked
+  ds3231.disableAlarm(2);
+
+  // schedule an alarm 10 seconds in the future
+  if (!ds3231.setAlarm1(
+        ds3231.now() + TimeSpan(1,21,0,0), //TimeSpan(int16_t days, int8_t hours, int8_t minutes, int8_t seconds);
+        DS3231_A1_Hour// this mode triggers the alarm when the seconds match. See Doxygen for other options
+      )) {
+    Serial.println("Error, alarm wasn't set!");
+  } else {
+    Serial.println("Alarm will happen in 10 seconds!");
+  }
+
   DateTime now = ds3231.now();
   rtc.setTime(now.second(), now.minute(), now.hour(), now.day(), now.month(), now.year());
 }
@@ -186,6 +214,36 @@ void blink_LED(void) {
   }
 }
 
+//6.10
+/*
+  Method to print the reason by which ESP32
+  has been awaken from sleep
+*/
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch (wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
+  }
+}
+
+//6.11 goingToSleep
+void going_to_sleep() {
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 1); //1 = High, 0 = Low
+  //Go to sleep now
+  Serial.println("Going to sleep now");
+  esp_deep_sleep_start();
+}
+
+
 //=========================== SETUP =================================
 void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
@@ -195,6 +253,12 @@ void setup() {
   setup_rtc();
   setup_ina219();
   setup_digital_IO();
+  //Increment boot number and print it every reboot
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount));
+
+  //Print the wakeup reason for ESP32
+  print_wakeup_reason();
 }
 
 //========================== LOOP ===================================
@@ -233,9 +297,15 @@ void loop() {
     Serial.println(pos);
     myservo.write(pos);
   }
-  if(timeUpdate_task3 < millis()){
+  if (timeUpdate_task3 < millis()) {
+    static uint8_t kCount;
     timeUpdate_task3 = millis() + 1000;
-    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format 
+    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format
+    // formating options  http://www.cplusplus.com/reference/ctime/strftime/
+    if(++kCount>5){
+      kCount = 0;
+      going_to_sleep();
+    }
   }
 }
 //=========================== END LOOP =============================
