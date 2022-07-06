@@ -5,9 +5,8 @@
 #include <ESP32Time.h>        //https://github.com/fbiego/ESP32Time
 #include <Wire.h>
 #include <Adafruit_INA219.h>  // by Adafruit
+#include "RTClib.h"           //https://github.com/adafruit/RTClib
 
-
-//API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
 
 //(2)-Define Constant Value
 const char* HOST = "script.google.com";
@@ -17,7 +16,7 @@ const uint32_t INTERVAL_TASK1 = 60000;  //update gsheet
 const uint16_t INTERVAL_TASK2 = 2000;   //update servo position
 const uint16_t INTERVAL_TASK3 = 1000;   //update Displaying Time
 const char* NTP_SERVER = "pool.ntp.org";
-const long  GMT_OFFSET_SEC = 3600*8;    //GMT+8
+const long  GMT_OFFSET_SEC = 3600 * 8;  //GMT+8
 const int   DAYLIGHT_OFFSET_SEC = 0;
 const uint8_t PV_POSITION_ARRAY[9] = {25, 35, 45, 55, 65, 75, 85, 95, 100};
 const uint8_t HOUR_START = 9;  //(9)9AM
@@ -36,7 +35,9 @@ const uint8_t LED = 2;
 WiFiClientSecure client;
 WiFiManager wm;
 Servo myservo;
+RTC_DS3231 ds3231;
 ESP32Time rtc;
+
 Adafruit_INA219 pv(ADD_INA219_PV);
 Adafruit_INA219 battery(ADD_INA219_BAT);
 
@@ -55,6 +56,7 @@ uint32_t timeUpdate_task1 = 0;
 uint32_t timeUpdate_task2 = 0;
 uint32_t timeUpdate_task3 = 0;
 bool ina219_isOK = false;
+bool ds3231_isOK = false;
 
 //6.1 Function - setup_wifi()
 void setup_wifi(void) {
@@ -86,6 +88,7 @@ void setup_servo(void) {
   // "myservo.attach(SERVO_PIN);"
 }
 //6.3 Function - update_gssheet()
+//API:https://script.google.com/macros/s/AKfycbyUBV3986c6CS_XWKnquRPZBZfNgR1dETGzt6IH8QseepRtoNaTV3yN0STdfQAko-T4/exec?Vpv=13.2&Ipv=0.33&Vbat=11.2&Ibat=0.22
 void update_gsheet(void) {
   Serial.println("\nStarting connection to server...");
   client.setInsecure();//skip verification
@@ -119,13 +122,20 @@ void update_gsheet(void) {
   }
 }
 
-//6.4 Setup RTC set with NTP
+//6.4 Setup RTC using DS3231
 void setup_rtc(void) {
-  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo)) {
-    rtc.setTimeStruct(timeinfo);
+  ds3231_isOK = true;
+  if (! ds3231.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    ds3231_isOK = false;
   }
+  if (ds3231.lostPower()) {
+    Serial.println("RTC lost power, let's set the time!");
+    ds3231.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  DateTime now = ds3231.now();
+  rtc.setTime(now.second(), now.minute(), now.hour(), now.day(), now.month(), now.year());
 }
 
 //6.5 Setup INA219
@@ -145,34 +155,34 @@ void setup_ina219(void) {
 }
 
 //6.6 Read Data from INA219 (PV)
-void read_pv_data(void){
- pv_array[SHUNT_VOLTAGE_INDEX] = pv.getShuntVoltage_mV();
- pv_array[BUS_VOLTAGE_INDEX] = pv.getBusVoltage_V();
- pv_array[CURRENT_MA_INDEX] = pv.getCurrent_mA();
- pv_array[POWER_MW_INDEX] = pv.getPower_mW();
- pv_array[LOAD_VOLTAGE_INDEX] = pv_array[BUS_VOLTAGE_INDEX]+ (pv_array[SHUNT_VOLTAGE_INDEX]/1000);
+void read_pv_data(void) {
+  pv_array[SHUNT_VOLTAGE_INDEX] = pv.getShuntVoltage_mV();
+  pv_array[BUS_VOLTAGE_INDEX] = pv.getBusVoltage_V();
+  pv_array[CURRENT_MA_INDEX] = pv.getCurrent_mA();
+  pv_array[POWER_MW_INDEX] = pv.getPower_mW();
+  pv_array[LOAD_VOLTAGE_INDEX] = pv_array[BUS_VOLTAGE_INDEX] + (pv_array[SHUNT_VOLTAGE_INDEX] / 1000);
 }
 
 //6.7 Read Data from INA219 (BATTERY)
-void read_battery_data(void){
- battery_array[SHUNT_VOLTAGE_INDEX] = battery.getShuntVoltage_mV();
- battery_array[BUS_VOLTAGE_INDEX] = battery.getBusVoltage_V();
- battery_array[CURRENT_MA_INDEX] = battery.getCurrent_mA();
- battery_array[POWER_MW_INDEX] = battery.getPower_mW();
- battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX]+ (battery_array[SHUNT_VOLTAGE_INDEX]/1000);  
+void read_battery_data(void) {
+  battery_array[SHUNT_VOLTAGE_INDEX] = battery.getShuntVoltage_mV();
+  battery_array[BUS_VOLTAGE_INDEX] = battery.getBusVoltage_V();
+  battery_array[CURRENT_MA_INDEX] = battery.getCurrent_mA();
+  battery_array[POWER_MW_INDEX] = battery.getPower_mW();
+  battery_array[LOAD_VOLTAGE_INDEX] = battery_array[BUS_VOLTAGE_INDEX] + (battery_array[SHUNT_VOLTAGE_INDEX] / 1000);
 }
 
 //6.8 setup_digital_IO
-void setup_digital_IO(void){
-  pinMode (LED, OUTPUT);  
+void setup_digital_IO(void) {
+  pinMode (LED, OUTPUT);
 }
 
 //6.9 blinking LED
-void blink_LED(void){
+void blink_LED(void) {
   static uint32_t kLedTick;
-  if(kLedTick < millis()){
+  if (kLedTick < millis()) {
     kLedTick = millis() + 200;
-    digitalWrite (LED, digitalRead(LED)^1);
+    digitalWrite (LED, digitalRead(LED) ^ 1);
   }
 }
 
@@ -222,6 +232,10 @@ void loop() {
     }
     Serial.println(pos);
     myservo.write(pos);
+  }
+  if(timeUpdate_task3 < millis()){
+    timeUpdate_task3 = millis() + 1000;
+    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format 
   }
 }
 //=========================== END LOOP =============================
