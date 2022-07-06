@@ -152,16 +152,6 @@ void setup_rtc(void) {
   // again, this isn't done at reboot, so a previously set alarm could easily go overlooked
   ds3231.disableAlarm(2);
 
-  // schedule an alarm 10 seconds in the future
-  if (!ds3231.setAlarm1(
-        ds3231.now() + TimeSpan(1,21,0,0), //TimeSpan(int16_t days, int8_t hours, int8_t minutes, int8_t seconds);
-        DS3231_A1_Hour// this mode triggers the alarm when the seconds match. See Doxygen for other options
-      )) {
-    Serial.println("Error, alarm wasn't set!");
-  } else {
-    Serial.println("Alarm will happen in 10 seconds!");
-  }
-
   DateTime now = ds3231.now();
   rtc.setTime(now.second(), now.minute(), now.hour(), now.day(), now.month(), now.year());
 }
@@ -237,7 +227,8 @@ void print_wakeup_reason() {
 
 //6.11 goingToSleep
 void going_to_sleep() {
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 1); //1 = High, 0 = Low
+
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 0); //1 = High, 0 = Low
   //Go to sleep now
   Serial.println("Going to sleep now");
   esp_deep_sleep_start();
@@ -288,24 +279,27 @@ void loop() {
     if (kHour >= HOUR_START && kHour <= HOUR_STOP) {
       pos = PV_POSITION_ARRAY[kHour - INDEX_OFFSET];
     }
-    else if (kHour >= 0 && kHour < HOUR_START) {
-      pos = PV_POSITION_ARRAY[0];
-    }
-    else if (kHour > HOUR_STOP && kHour <= 23) {
-      pos = PV_POSITION_ARRAY[8];
-    }
-    Serial.println(pos);
-    myservo.write(pos);
-  }
-  if (timeUpdate_task3 < millis()) {
-    static uint8_t kCount;
-    timeUpdate_task3 = millis() + 1000;
-    Serial.println(rtc.getTime("%A, %B %d %Y %H:%M:%S"));   // (String) returns time with specified format
-    // formating options  http://www.cplusplus.com/reference/ctime/strftime/
-    if(++kCount>5){
-      kCount = 0;
+    //    else if (kHour >= 0 && kHour < HOUR_START) {
+    //      pos = PV_POSITION_ARRAY[0];
+    //    }
+    //    else if (kHour > HOUR_STOP && kHour <= 23) {
+    //      pos = PV_POSITION_ARRAY[8];
+    //    }
+    if (kHour > HOUR_START) { //6PM and above
+      // schedule an alarm 13 hours 30 minutes 0 seconds in the future
+      if (!ds3231.setAlarm1(
+            ds3231.now() + TimeSpan(0, 13, 30, 0), //TimeSpan(int16_t days, int8_t hours, int8_t minutes, int8_t seconds);
+            DS3231_A1_Hour
+          )) {
+        Serial.println("Error, alarm wasn't set!");
+      } else {
+        Serial.println("Alarm will happen in 13.5 Hours");
+      }
       going_to_sleep();
     }
+
+    Serial.println(pos);
+    myservo.write(pos);
   }
 }
 //=========================== END LOOP =============================
